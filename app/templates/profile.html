@@ -1,0 +1,96 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Parent Profile — Lully</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/profile.css' %}">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="top-left">
+        <!-- removed house icon per request -->
+        <div class="logo-row">
+          <div class="logo-mark">
+            <img src="{% static 'images/Lully_logo.png' %}" alt="Lully Logo" class="logo-img">
+          </div>
+          <div class="title-block">
+            <h1>Parent Profile</h1>
+            <p class="subtitle">Manage your babies' monitoring</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="top-right">
+        <a href="{% url 'account_edit' %}" class="account-box" title="Edit account">
+          {% if profile_url %}
+            <img src="{{ profile_url }}" alt="profile" class="account-pfp" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">
+          {% else %}
+            <div class="account-icon">👤</div>
+          {% endif %}
+          <div class="account-text">
+            <div class="acc-name">{{ name|default:'Parent Account' }}</div>
+            <div class="acc-sub">Logged in</div>
+          </div>
+        </a>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="controls">
+        <button class="btn add">+ Add Baby Profile</button>
+      </div>
+      
+      <!-- Angel's stuff -->
+      <section class="cards" id="babyCards">
+        {% for baby in babies %}
+        <article class="card">
+          <div class="card-header">
+            <div class="avatar avatar-blue">{{ baby.name|slice:":1" }}</div>
+            <div class="card-title">
+              <div class="name">{{ baby.name }}</div>
+              <div class="age">{{ baby.birth_date }}</div> </div>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="label">Date of Birth:</div>
+                <div class="value">{{ baby.birth_date|date:"m/d/Y" }}</div>
+              </div>
+            </div>
+            <div class="actions">
+              <a href="{% url 'monitor_dashboard' baby.id %}" class="view">View Monitor</a>
+              <button class="delete" title="Delete">🗑️</button>
+            </div>
+          </div>
+        </article>
+        {% empty %}
+        <p>No baby profiles found. Click "Add Baby Profile" to get started!</p>
+        {% endfor %}
+      </section>
+      <!-- Angel's stuff -->
+
+      
+
+      <section class="about">
+        <div class="about-inner">
+          <div class="about-icon">💠</div>
+          <div>
+            <h3>About Lully Monitor</h3>
+            <ul>
+              <li>Add multiple baby profiles to monitor all your children</li>
+              <li>Click on any baby profile to view their real-time health monitoring</li>
+              <li>Each baby has their own dedicated monitoring dashboard</li>
+              <li>Data is saved locally on your device</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="{% static 'js/profile.js' %}"></script>
+</body>
+</html>
