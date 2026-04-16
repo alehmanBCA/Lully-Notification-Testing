@@ -1,47 +1,86 @@
 let hrChart = null;
 
 function canRunMonitorScripts() {
-    return typeof CURRENT_BABY_ID !== 'undefined' && CURRENT_BABY_ID;
+    // Allow either the mock server URLs to be defined, or the Django
+    // CURRENT_BABY_ID to be present so we can call the backend vitals API.
+    return (typeof HR_API_URL !== 'undefined' && typeof TEMP_API_URL !== 'undefined') || typeof CURRENT_BABY_ID !== 'undefined';
+}
+
+function showAlert(currentHr) {
+    const modal = document.getElementById('alert-modal');
+    const alertText = document.getElementById('alert-text');
+    if (modal && alertText) {
+        alertText.innerHTML = `Warning: Heart rate is <strong>${currentHr} BPM</strong>, which is above the safe limit!`;
+        modal.style.display = 'flex';
+    }
+}
+
+function dismissAlert() {
+    const modal = document.getElementById('alert-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 function pulseHeartRateElement() {
     const hrElement = document.getElementById('live-hr');
-    if (!hrElement) {
-        return;
-    }
-
+    if (!hrElement) return;
     hrElement.classList.remove('pulse-animation');
     void hrElement.offsetWidth;
     hrElement.classList.add('pulse-animation');
 }
 
+// async function updateVitals() {
+//     if (!canRunMonitorScripts()) return;
+    
+//     const hrElement = document.getElementById('live-hr');
+//     const spo2Element = document.getElementById('live-spo2');
+//     if (!hrElement || !spo2Element) return;
+//     pulseHeartRateElement();
+    
+//     try {
+//         const response = await fetch(`/api/baby/${CURRENT_BABY_ID}/vitals/`);
+//         const data = await response.json();
+        
+//         hrElement.textContent = data.heart_rate ?? '--';
+//         spo2Element.textContent = data.oxygen ?? data.oxygen_level ?? '--';
+
+//         if (data.heart_rate && data.heart_rate > (data.max_heart_rate || 160)) {
+//             showAlert(data.heart_rate);
+//         }
+//     } catch (error) {
+//         console.error('Error fetching vitals:', error);
+//     }
+// }
+
 async function updateVitals() {
-    if (!canRunMonitorScripts()) {
-        return;
-    }
-
+    if (!canRunMonitorScripts()) return;
+    
     const hrElement = document.getElementById('live-hr');
-    const spo2Element = document.getElementById('live-spo2');
-
-    if (!hrElement || !spo2Element) {
-        return;
+    const tempElement = document.getElementById('live-temp');
+    
+    try {
+        const hrResponse = await fetch(HR_API_URL);
+        const hrData = await hrResponse.json();
+        if (hrElement) {
+            hrElement.textContent = hrData.heartRate;
+            if (hrData.heartRate > 150) hrElement.style.color = "#ff6b6b";
+            else hrElement.style.color = "#03446F";
+        }
+    } catch (err) {
+        console.error("Heart Rate API Error:", err);
     }
-
-    pulseHeartRateElement();
 
     try {
-        const response = await fetch(`/api/baby/${CURRENT_BABY_ID}/vitals/`);
-        if (!response.ok) {
-            throw new Error(`Vitals response error: ${response.status}`);
+        const tempResponse = await fetch(TEMP_API_URL);
+        const tempData = await tempResponse.json();
+        if (tempElement) {
+            tempElement.textContent = tempData.temperatureF.toFixed(1);
         }
-
-        const data = await response.json();
-        hrElement.textContent = data.heart_rate ?? '--';
-        spo2Element.textContent = data.oxygen ?? data.oxygen_level ?? '--';
-    } catch (error) {
-        console.error('Error fetching vitals:', error);
+    } catch (err) {
+        console.error("Temperature API Error:", err);
     }
 }
+
+
 
 function initChart() {
     if (!canRunMonitorScripts() || typeof Chart === 'undefined') {
@@ -100,41 +139,88 @@ async function updateChartHistory() {
     }
 }
 
-async function fetchAndDisplayTemperature() {
-    const tempElement = document.getElementById('temp');
-    if (!tempElement) {
+async function fetchVitals() {
+    if (!canRunMonitorScripts()) return;
+
+    const hrElement = document.getElementById("live-hr");
+    const tempElement = document.getElementById("live-temp");
+
+    // If the front-end is pointed at the mock server, the responses are
+    // separate endpoints. If not, fall back to the Django backend which
+    // returns both values from `/api/baby/<id>/vitals/`.
+    if (typeof HR_API_URL !== 'undefined' && HR_API_URL === TEMP_API_URL) {
+        // Single combined endpoint (Django)
+        try {
+            const res = await fetch(HR_API_URL);
+            if (!res.ok) throw new Error(`vitals response ${res.status}`);
+            const data = await res.json();
+
+            if (hrElement) {
+                hrElement.textContent = data.heart_rate ?? '--';
+                if (typeof data.heart_rate === 'number') {
+                    hrElement.style.color = data.heart_rate > 150 ? "#ff6b6b" : "#03446F";
+                }
+            }
+            if (tempElement) {
+                tempElement.textContent = (typeof data.temperature === 'number') ? data.temperature.toFixed(1) : '--';
+            }
+        } catch (err) {
+            console.error('Vitals fetch failed:', err);
+            if (hrElement) hrElement.textContent = "--";
+            if (tempElement) tempElement.textContent = "--";
+        }
         return;
     }
 
+    // Otherwise, try to fetch the separate mock endpoints (HR and Temp).
+    // Heart rate
     try {
-        const response = await fetch('/api/temperature');
-        if (!response.ok) {
-            throw new Error(`Temperature response error: ${response.status}`);
+        const res = await fetch(HR_API_URL);
+        const data = await res.json();
+        if (hrElement) {
+            hrElement.textContent = data.heartRate ?? '--';
+            if (typeof data.heartRate === 'number') {
+                hrElement.style.color = data.heartRate > 150 ? "#ff6b6b" : "#03446F";
+            }
         }
+    } catch (err) {
+        console.error("HR fetch failed:", err);
+        if (hrElement) hrElement.textContent = "--";
+    }
 
-        const tempData = await response.json();
-        const tempF = tempData.temperatureF ?? tempData.temperature;
-
-        if (typeof tempF !== 'number') {
-            throw new Error(`Unexpected payload: ${JSON.stringify(tempData)}`);
+    // Temperature
+    try {
+        const res = await fetch(TEMP_API_URL);
+        const data = await res.json();
+        if (tempElement) {
+            tempElement.textContent = (typeof data.temperatureF === 'number') ? data.temperatureF.toFixed(1) : '--';
         }
-
-        tempElement.textContent = `${tempF.toFixed(1)} °F`;
-    } catch (error) {
-        console.error('Error fetching temperature:', error);
-        tempElement.textContent = 'Failed to load temperature';
+    } catch (err) {
+        console.error("Temp fetch failed:", err);
+        if (tempElement) tempElement.textContent = "--";
     }
 }
 
+// Periodically refresh vitals using the unified fetch function.
+setInterval(fetchVitals, 2000);
+fetchVitals();
+
+
 document.addEventListener('DOMContentLoaded', () => {
-    fetchAndDisplayTemperature();
 
     if (canRunMonitorScripts()) {
-        updateVitals();
-        initChart();
-        updateChartHistory();
-
-        setInterval(updateVitals, 5000);
-        setInterval(updateChartHistory, 10000);
+        console.log("Live monitoring started...");
+        fetchVitals();
+        setInterval(fetchVitals, 5000);
+    } else {
+        console.error("Monitoring failed to start: API URLs are missing.");
     }
+    // if (canRunMonitorScripts()) {
+    //     updateVitals();
+    //     initChart();
+    //     updateChartHistory();
+
+    //     setInterval(updateVitals, 5000);
+    //     setInterval(updateChartHistory, 10000);
+    // }
 });
